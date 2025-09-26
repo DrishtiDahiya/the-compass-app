@@ -106,34 +106,79 @@ def send_email(subject, body_html):
         print(f"🔴 ERROR sending email: {e}")
 
 def main():
-    print("Running notifier script...")
+    print("Running notifier script with hourly precision...")
     tasks_df = load_tasks()
     if tasks_df.empty:
+        print("No tasks found. Exiting.")
         return
 
     active_tasks = tasks_df[tasks_df['status'] == 'Active']
+    
     tasks_to_remind_list = []
-    today = datetime.now().date()
+    now = datetime.now()
+    print(f"Current time is: {now.strftime('%Y-%m-%d %H:%M:%S')}")
 
     for index, row in active_tasks.iterrows():
         if pd.isna(row['due_date']):
             continue
-        delta = row['due_date'].date() - today
-        days_left = delta.days
-        if days_left == 0 or days_left in REMINDER_DAYS:
+
+        # Calculate the exact time difference from now until the due date
+        # We assume the deadline is at the very beginning of the day (00:00)
+        due_datetime = row['due_date']
+        delta = due_datetime - now
+        total_hours_left = delta.total_seconds() / 3600
+
+        reminder_reason = None
+
+        # --- NEW LOGIC WITH TIME WINDOWS ---
+        # This checks if the time left is within a specific 4-hour window to avoid sending the same email multiple times.
+        # For example, the 3-day reminder will only trigger when between 72 and 76 hours are left.
+
+        # Check for 3-hour window (0 to 4 hours left)
+        if 0 < total_hours_left <= 4:
+            reminder_reason = "is due in just a few hours!"
+
+        # Check for 1-day window (24 to 28 hours left)
+        elif 24 < total_hours_left <= 28:
+            reminder_reason = "is due tomorrow!"
+        
+        # Check for 3-day window (72 to 76 hours left)
+        elif 72 < total_hours_left <= 76:
+            reminder_reason = "is due in 3 days."
+
+        if reminder_reason:
+            print(f"✅ MATCH FOUND: Task '{row['task_name']}' {reminder_reason}")
             tasks_to_remind_list.append({
                 'task_name': row['task_name'],
                 'due_date': row['due_date'],
-                'days_left': "Today" if days_left == 0 else days_left
+                'days_left': reminder_reason # We'll use this custom string in the email
             })
             
     if tasks_to_remind_list:
-        # --- Random subject line is chosen here! ---
+        # We'll slightly adjust the email body formatting to use our new `reminder_reason`
         subject = f"{random.choice(SUBJECT_LINES)} ({len(tasks_to_remind_list)} upcoming)"
-        email_body = format_email_body(tasks_to_remind_list)
+        
+        # --- Customizing the email body ---
+        heading = random.choice(HEADINGS)
+        sign_off = random.choice(SIGN_OFFS)
+        task_list_html = ""
+        for task in tasks_to_remind_list:
+             task_list_html += f"<li><b>{task['task_name']}</b> &mdash; {task['days_left']} (Due: {task['due_date'].strftime('%A, %b %d')})</li>"
+        
+        email_body = f"""
+        <html><head><style>
+            body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f4f7f6; color: #333; }}
+            .container {{ max-width: 600px; margin: 20px auto; padding: 25px; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.07); }}
+            h1 {{ color: #2c3e50; font-size: 24px; }} ul {{ list-style-type: none; padding: 0; }}
+            li {{ background-color: #ecf0f1; margin-bottom: 10px; padding: 15px; border-radius: 8px; font-size: 16px; border-left: 5px solid #3498db; }}
+            p {{ line-height: 1.6; }}
+        </style></head><body><div class="container">
+            <h1>{heading}</h1><p>A quick update on your mission plan:</p><ul>{task_list_html}</ul><p>{sign_off}</p>
+        </div></body></html>
+        """
+        
         send_email(subject, email_body)
     else:
-        print("No reminders to send today.")
+        print("No tasks matched the reminder criteria in this run.")
 
-if __name__ == "__main__":
-    main()
+    print("Script finished.")
