@@ -1,0 +1,13 @@
+# Created by venv; see https://docs.python.org/3/library/venv.html
+
+# Ignore Python's virtual environment
+venv/
+
+# Ignore Streamlit's secrets file (we will store secrets in the cloud)
+.streamlit/secrets.toml
+
+# Ignore Python cache files
+__pycache__/
+
+# Ignore specific OS files
+.DS_Store
