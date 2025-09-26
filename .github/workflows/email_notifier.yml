@@ -1,0 +1,52 @@
+# This is the name of the workflow as it will appear in the "Actions" tab
+name: Hourly Task Notifier
+
+on:
+  # This section defines when the workflow runs
+
+  # 1. On a schedule:
+  schedule:
+    # "cron: '0 */4 * * *'" means "run at minute 0 of every 4th hour".
+    # This runs the script at 00:00, 04:00, 08:00, 12:00, 16:00, 20:00 UTC time.
+    - cron: '0 */4 * * *'
+
+  # 2. Manually:
+  # This adds a "Run workflow" button on the Actions page for easy testing.
+  workflow_dispatch:
+
+# This section defines the actual job that will run
+jobs:
+  run-notifier:
+    # The job will run on the latest version of a standard Ubuntu Linux virtual machine
+    runs-on: ubuntu-latest
+
+    # These are the individual steps the job will perform in order
+    steps:
+      # Step 1: Checks out your repository's code onto the virtual machine
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Step 2: Sets up the specified version of Python
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # Step 3: Installs all the Python libraries listed in your requirements.txt file
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # Step 4: Creates a temporary secrets.toml file for the script to read
+      # This is the magic step: it takes the secure GitHub Secrets and writes them to a file
+      # that your st.secrets command in Python can understand.
+      - name: Create secrets.toml from GitHub Secrets
+        run: |
+          mkdir -p .streamlit
+          echo "BREVO_API_KEY = '${{ secrets.BREVO_API_KEY }}'" >> .streamlit/secrets.toml
+          echo "TO_EMAIL = '${{ secrets.TO_EMAIL }}'" >> .streamlit/secrets.toml
+          echo "FROM_EMAIL = '${{ secrets.FROM_EMAIL }}'" >> .streamlit/secrets.toml
+          echo "GEMINI_API_KEY = '${{ secrets.GEMINI_API_KEY }}'" >> .streamlit/secrets.toml
+
+      # Step 5: Executes your notifier script
+      - name: Run the notifier script
+        run: python notifier.py
